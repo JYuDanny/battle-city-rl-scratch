@@ -10,7 +10,6 @@ GAE (Generalized Advantage Estimation):
 """
 
 import torch
-import numpy as np
 from rl.config import Config
 
 
@@ -89,8 +88,14 @@ class RolloutBuffer:
         Args:
             last_value: 最后状态的 V(s_T), 用于计算最后一个 δ
         """
+        if len(self.values) == 0:
+            raise RuntimeError("compute_gae called on empty buffer. Call store() first.")
+
         values = torch.stack([v.squeeze() for v in self.values])
         adv = torch.zeros(self.rollout_steps, dtype=torch.float32)
+
+        assert len(self.rewards) == self.rollout_steps, \
+            f"Expected {self.rollout_steps} stored steps, got {len(self.rewards)}"
 
         gae = 0.0
         for t in reversed(range(self.rollout_steps)):
@@ -104,8 +109,13 @@ class RolloutBuffer:
             gae = delta + self.gamma * self.gae_lambda * mask * gae
             adv[t] = gae
 
+        if len(adv) == 1:
+            self.advantages = adv
+            self.returns = (adv + values).detach()
+            return
+
         adv_mean = adv.mean()
-        adv_std = adv.std() + 1e-8
+        adv_std = adv.std(unbiased=False) + 1e-8
         self.advantages = (adv - adv_mean) / adv_std
         self.returns = (adv + values).detach()
 
