@@ -26,11 +26,11 @@ class TestPPOTrainer:
 
         for i in range(config.ppo.rollout_steps):
             if i < num_good:
-                obs = torch.ones(13, 13, 9) * 0.5  # 好状态特征
+                obs = torch.ones(84, 84, 3) * 0.5  # 好状态特征
                 reward = 1.0
                 value = torch.tensor([5.0])
             else:
-                obs = torch.ones(13, 13, 9) * (-0.5)  # 坏状态特征
+                obs = torch.ones(84, 84, 3) * (-0.5)  # 坏状态特征
                 reward = -1.0
                 value = torch.tensor([-5.0])
 
@@ -73,7 +73,7 @@ class TestPPOTrainer:
         trainer = PPOTrainer(config)
 
         # 手动构造极端场景
-        obs = torch.randn(8, 13, 13, 9)
+        obs = torch.randn(8, 84, 84, 3)
         logits, values = net(obs)
         
         actions = torch.zeros(8, dtype=torch.long)

@@ -13,12 +13,12 @@ class TestActorCritic:
     """ActorCritic 网络测试套件"""
 
     def test_output_shapes(self):
-        """验证输出维度: action_logits [batch, 6], value [batch, 1]"""
+        """验证输出维度: action_logits [batch, 10], value [batch, 1]"""
         config = Config()
         net = ActorCritic(config)
         batch_size = 32
 
-        obs = torch.randn(batch_size, 13, 13, 9)  # 9 通道: 地形+实体+方向
+        obs = torch.randn(batch_size, 84, 84, 3)  # 3 通道 RGB: TirEnv 像素帧
         logits, value = net(obs)
 
         assert logits.shape == (batch_size, config.env.action_size), \
@@ -30,7 +30,7 @@ class TestActorCritic:
         """验证 value 输出在合理范围内 (未经训练, 应接近 0)"""
         config = Config()
         net = ActorCritic(config)
-        obs = torch.randn(16, 13, 13, 9)
+        obs = torch.randn(16, 84, 84, 3)
 
         _, value = net(obs)
 
@@ -40,7 +40,7 @@ class TestActorCritic:
         """验证 logits 经过 softmax 后得到有效的概率分布"""
         config = Config()
         net = ActorCritic(config)
-        obs = torch.randn(8, 13, 13, 9)
+        obs = torch.randn(8, 84, 84, 3)
 
         logits, _ = net(obs)
         probs = torch.softmax(logits, dim=-1)
@@ -60,7 +60,7 @@ class TestActorCritic:
         torch.manual_seed(42)
         net2 = ActorCritic(config)
 
-        obs = torch.randn(4, 13, 13, 9)
+        obs = torch.randn(4, 84, 84, 3)
         logits1, value1 = net1(obs)
         logits2, value2 = net2(obs)
 
@@ -71,7 +71,7 @@ class TestActorCritic:
         """验证 deterministic=True 时返回最大概率对应的动作"""
         config = Config()
         net = ActorCritic(config)
-        obs = torch.randn(1, 13, 13, 9)
+        obs = torch.randn(1, 84, 84, 3)
 
         action, log_prob, value = net.get_action(obs, deterministic=True)
         logits, _ = net.forward(obs)
@@ -84,7 +84,7 @@ class TestActorCritic:
         """验证随机采样返回的动作形状正确, log_prob 为负值"""
         config = Config()
         net = ActorCritic(config)
-        obs = torch.randn(4, 13, 13, 9)
+        obs = torch.randn(4, 84, 84, 3)
 
         action, log_prob, value = net.get_action(obs, deterministic=False)
 
@@ -94,10 +94,10 @@ class TestActorCritic:
         assert (log_prob <= 0).all(), f"Log prob should be <= 0, got {log_prob}"
 
     def test_get_action_single_obs(self):
-        """验证单样本输入 [1,13,13,9] 正常工作"""
+        """验证单样本输入 [1,84,84,3] 正常工作"""
         config = Config()
         net = ActorCritic(config)
-        obs = torch.randn(1, 13, 13, 9)
+        obs = torch.randn(1, 84, 84, 3)
 
         action, log_prob, value = net.get_action(obs)
 

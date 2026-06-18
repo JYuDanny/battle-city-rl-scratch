@@ -20,7 +20,7 @@ class TestRolloutBuffer:
         buffer.reset()
         for _ in range(config.ppo.rollout_steps):
             buffer.store(
-                obs=torch.randn(13, 13, 9),
+                obs=torch.randn(84, 84, 3),
                 action=torch.tensor(2),
                 reward=0.01,
                 value=torch.tensor([0.0]),
@@ -69,7 +69,7 @@ class TestRolloutBuffer:
 
         for i in range(3):
             buffer.store(
-                obs=torch.randn(13, 13, 9),
+                obs=torch.randn(84, 84, 3),
                 action=torch.tensor(2),
                 reward=rewards[i],
                 value=torch.tensor([0.0]),
@@ -98,7 +98,7 @@ class TestRolloutBuffer:
         buffer.reset()
         for i in range(config.ppo.rollout_steps):
             buffer.store(
-                obs=torch.randn(13, 13, 9),
+                obs=torch.randn(84, 84, 3),
                 action=torch.tensor(i % 6),
                 reward=float(i % 3) - 1.0,
                 value=torch.tensor([0.0]),

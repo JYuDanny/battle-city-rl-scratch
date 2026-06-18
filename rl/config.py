@@ -12,13 +12,13 @@ from typing import Tuple
 class EnvConfig:
     """环境相关配置
     
-    tile_size: 地图网格尺寸 (不含边界)
-    action_size: 动作空间大小 [上, 下, 左, 右, 射击, 静止]
+    obs_shape: 观察空间形状 (H, W, C), TirEnv 输出 84x84x3 uint8
+    action_size: 动作空间大小, TirEnv 为 Discrete(10)
     max_steps: 单局最大步数限制, 防止无限循环
     """
-    tile_size: Tuple[int, int] = (13, 13)
-    action_size: int = 6
-    max_steps: int = 2000
+    obs_shape: Tuple[int, int, int] = (84, 84, 3)
+    action_size: int = 10
+    max_steps: int = 5000
 
 
 @dataclass
@@ -55,8 +55,8 @@ class NetworkConfig:
     conv_channels: Conv2D 各层输出通道数列表, 空列表表示跳过卷积
     share_mlp_sizes: 共享 MLP 隐藏层维度列表
     """
-    conv_channels: Tuple[int, ...] = (32, 64)
-    share_mlp_sizes: Tuple[int, ...] = (512,)
+    conv_channels: Tuple[int, ...] = (32, 64, 64)
+    share_mlp_sizes: Tuple[int, ...] = (256,)
 
 
 @dataclass

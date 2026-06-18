@@ -20,7 +20,7 @@ class ActorCritic(nn.Module):
 
     Conv2D backbone 提取空间特征, 分叉出策略头(Actor)和价值头(Critic)。
 
-    输入: 环境观察 [batch_size, tile_h, tile_w, channels]
+    输入: 环境观察 [batch_size, H, W, C] uint8 或 float32
     输出: (action_logits [batch_size, action_size], state_value [batch_size, 1])
     """
 
@@ -35,9 +35,7 @@ class ActorCritic(nn.Module):
         env_cfg = config.env
         net_cfg = config.network
 
-        # NOTE: obs_channels 硬编码为 9, 未来重构将迁移至 EnvConfig 中统一管理
-        # 地形(5) + 实体(3) + 方向(1)
-        obs_channels = 9
+        obs_channels = env_cfg.obs_shape[2]
 
         # Conv2D backbone: 保留空间结构的卷积层
         conv_layers = []
@@ -52,9 +50,9 @@ class ActorCritic(nn.Module):
 
         # 计算展平后维度
         if conv_layers:
-            flattened_dim = in_channels * env_cfg.tile_size[0] * env_cfg.tile_size[1]
+            flattened_dim = in_channels * env_cfg.obs_shape[0] * env_cfg.obs_shape[1]
         else:
-            flattened_dim = obs_channels * env_cfg.tile_size[0] * env_cfg.tile_size[1]
+            flattened_dim = obs_channels * env_cfg.obs_shape[0] * env_cfg.obs_shape[1]
 
         # 共享 FC 层
         fc_layers = []
@@ -89,12 +87,15 @@ class ActorCritic(nn.Module):
         """前向传播
 
         Args:
-            obs: 环境观察张量 [batch_size, H, W, C] 浮点型
+            obs: 环境观察张量 [batch_size, H, W, C], uint8 或 float32
 
         Returns:
             action_logits: [batch_size, action_size] 各动作的未归一化 logits
             state_value: [batch_size, 1] 状态价值估计
         """
+        # 将 uint8 0-255 归一化为 float32 0-1
+        if obs.dtype == torch.uint8:
+            obs = obs.float() / 255.0
         # 将 [B, H, W, C] 转换为 [B, C, H, W] 供 Conv2D 使用
         obs = obs.permute(0, 3, 1, 2)
 
