@@ -1,11 +1,10 @@
 """Curriculum Learning (课程学习管理器)
 
-原理:
-  1. 按关卡固有特征(敌人数量、墙体密度等)自动分组为 3 个 difficulty stage
-  2. Agent 需要满足通关率阈值才能晋升到下一阶段
-  3. 若表现崩盘, 自动回退到上一阶段重新巩固
-
-只读 tirinox 关卡数据, 不注入任何自定义游戏参数。
+动态难度调节:
+  - 根据 agent 近期通关率自动调整地图难度
+  - 通关率高 → 增加难度(更多敌人、更密围墙)
+  - 通关率低 → 降低难度
+  - 不使用固定分桶, 连续调节难度参数
 """
 
 from collections import deque
@@ -13,9 +12,13 @@ from rl.config import Config, CurriculumConfig
 
 
 class CurriculumManager:
-    """课程学习管理器
+    """动态难度课程管理器
 
-    追踪 agent 在每个 stage 的表现, 管理阶段晋升与回退。
+    持续追踪 agent 表现, 实时调节环境难度。
+    difficulty 参数 (0.0~1.0) 决定了环境生成规则:
+      0.0 = 最简单 (1-2个敌人, 5%围墙)
+      0.5 = 中等   (3-4个敌人, 20%围墙)
+      1.0 = 最困难 (5-6个敌人, 35%围墙)
     """
 
     def __init__(self, config: Config):
@@ -27,20 +30,15 @@ class CurriculumManager:
         cc: CurriculumConfig = config.curriculum
         self.eval_interval = cc.evaluation_interval
         self.eval_window = cc.evaluation_window
-        self.promo_thresh_s1 = cc.promotion_threshold_stage1
-        self.promo_thresh_s2 = cc.promotion_threshold_stage2
-        self.demotion_thresh = cc.demotion_threshold
-        self.demotion_window = cc.demotion_window
+        self.promo_thresh = 0.7   # 通关率 >70% → 升难度
+        self.demote_thresh = 0.3  # 通关率 <30% → 降难度
+        self.difficulty_step = 0.1  # 每次调节步长
 
-        self.current_stage = 1
-        self.max_stage = 3
+        self.current_difficulty = 0.0  # 从最简单开始
         self.episode_count = 0
 
         # 滑动窗口存储最近 episode 的通关结果
         self._recent_results = deque(maxlen=self.eval_window)
-
-        # 关卡池: {stage: [level_indices]} (由 trainer 在读取 tirinox 数据后填充)
-        self.level_pools = {1: [], 2: [], 3: []}
 
     def record_episode(self, won: bool, enemies_killed: int, total_enemies: int):
         """记录一个 episode 的结果
@@ -68,75 +66,59 @@ class CurriculumManager:
         wins = sum(1 for r in self._recent_results if r['won'])
         return wins / len(self._recent_results)
 
-    def avg_kill_ratio(self) -> float:
-        """计算滑动窗口内的平均击杀率"""
-        if len(self._recent_results) == 0:
-            return 0.0
-        ratios = [r['enemies_killed'] / max(r['total_enemies'], 1)
-                  for r in self._recent_results]
-        return sum(ratios) / len(ratios)
-
-    def should_promote(self) -> bool:
-        """判断是否应该晋升到下一 stage"""
-        if self.current_stage >= self.max_stage:
-            return False
-        if len(self._recent_results) < self.eval_window:
-            return False
-
-        wr = self.win_rate()
-        if self.current_stage == 1:
-            kill_ratio = self.avg_kill_ratio()
-            return wr >= self.promo_thresh_s1 and kill_ratio >= 0.8
-        if self.current_stage == 2:
-            return wr >= self.promo_thresh_s2
-        return False
-
-    def should_demote(self) -> bool:
-        """判断是否应该回退到上一 stage"""
-        if self.current_stage <= 1:
-            return False
-        if len(self._recent_results) < self.demotion_window:
-            return False
-        recent = list(self._recent_results)[-self.demotion_window:]
-        wins = sum(1 for r in recent if r['won'])
-        return wins / self.demotion_window < self.demotion_thresh
-
     def check_and_update(self) -> tuple:
-        """每 eval_interval 个 episode 执行一次阶段检查
+        """每 eval_interval 个 episode 执行一次难度检查
 
         Returns:
-            (changed: bool, new_stage: int)
+            (changed: bool, new_difficulty: float)
         """
         if self.episode_count % self.eval_interval != 0:
-            return False, self.current_stage
+            return False, self.current_difficulty
+        if len(self._recent_results) < self.eval_window:
+            return False, self.current_difficulty
 
-        if self.should_promote():
-            self.current_stage = min(self.current_stage + 1, self.max_stage)
-            return True, self.current_stage
+        wr = self.win_rate()
+        old_diff = self.current_difficulty
 
-        if self.should_demote():
-            self.current_stage = max(self.current_stage - 1, 1)
-            return True, self.current_stage
+        if wr > self.promo_thresh:
+            self.current_difficulty = min(1.0, self.current_difficulty + self.difficulty_step)
+        elif wr < self.demote_thresh:
+            self.current_difficulty = max(0.0, self.current_difficulty - self.difficulty_step)
 
-        return False, self.current_stage
+        return (self.current_difficulty != old_diff), self.current_difficulty
 
-    def force_stage(self, stage: int):
-        """手动覆写当前 stage"""
-        self.current_stage = max(1, min(stage, self.max_stage))
+    def force_difficulty(self, difficulty: float):
+        """手动覆写难度
 
-    def get_level_pool(self, stage: int | None = None) -> list:
-        """获取指定 stage 的关卡池"""
-        s = stage if stage is not None else self.current_stage
-        return self.level_pools.get(s, [])
+        Args:
+            difficulty: 0.0 ~ 1.0 之间的难度值
+        """
+        self.current_difficulty = max(0.0, min(1.0, difficulty))
 
-    def classify_levels(self, level_stats: list[dict]):
-        """根据关卡固有特征自动分组入 3 个 difficulty bucket"""
-        if not level_stats:
-            return
-        enemy_counts = [ls['enemy_count'] for ls in level_stats]
-        sorted_indices = sorted(range(len(enemy_counts)), key=lambda i: enemy_counts[i])
-        n = len(sorted_indices)
-        bucket_size = n // 3
-        self.level_pools[1] = sorted_indices[:bucket_size]
-        self.level_pools[2] = sorted_indices[bucket_size:2 * bucket_size]
-        self.level_pools[3] = sorted_indices[2 * bucket_size:]
+    def get_params(self) -> dict:
+        """根据当前难度返回环境生成参数
+        
+        Returns:
+            dict with 'num_enemies', 'wall_density', 'enemy_speed_scale'
+        """
+        d = self.current_difficulty
+        return {
+            'num_enemies': max(1, int(2 + d * 4)),       # 1~6
+            'wall_density': 0.05 + d * 0.30,              # 5%~35%
+            'enemy_speed_scale': 0.5 + d * 0.5,           # 50%~100%
+        }
+
+    @property
+    def current_stage(self):
+        """兼容旧接口: 将连续难度映射为整数 stage"""
+        if self.current_difficulty < 0.33:
+            return 1
+        elif self.current_difficulty < 0.66:
+            return 2
+        else:
+            return 3
+
+    @property
+    def level_pools(self):
+        """兼容旧接口: 返回空字典(不再需要关卡池)"""
+        return {1: [], 2: [], 3: []}
