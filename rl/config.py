@@ -40,10 +40,10 @@ class PPOConfig:
     gamma: float = 0.99
     gae_lambda: float = 0.95
     clip_epsilon: float = 0.2
-    k_epochs: int = 10
-    mini_batch_size: int = 64
-    lr: float = 3e-4
-    entropy_coef: float = 0.01
+    k_epochs: int = 5
+    mini_batch_size: int = 256
+    lr: float = 1e-4
+    entropy_coef: float = 0.03
     value_coef: float = 0.5
     max_grad_norm: float = 0.5
 
@@ -52,11 +52,11 @@ class PPOConfig:
 class NetworkConfig:
     """网络架构超参数
     
-    tile_embedding_dim: tile 嵌入层输出维度
+    conv_channels: Conv2D 各层输出通道数列表, 空列表表示跳过卷积
     share_mlp_sizes: 共享 MLP 隐藏层维度列表
     """
-    tile_embedding_dim: int = 128
-    share_mlp_sizes: Tuple[int, ...] = (256, 256)
+    conv_channels: Tuple[int, ...] = (32, 64)
+    share_mlp_sizes: Tuple[int, ...] = (512,)
 
 
 @dataclass
@@ -64,15 +64,17 @@ class RewardConfig:
     """奖励函数权重
     
     分层奖励体系中各事件的奖励值。
-    势能奖励基于到最近敌人的距离变化。
+    势能奖励已重新设计: 基于"面朝敌人"而非"接近敌人"。
     """
-    survival: float = 0.01
+    survival: float = 0.02
     kill_enemy: float = 2.0
     wave_clear: float = 5.0
     level_clear: float = 100.0
     death: float = -10.0
-    base_destroyed: float = -50.0
-    potential_scale: float = 0.01
+    base_destroyed: float = -20.0
+    base_danger: float = -1.0
+    facing_enemy: float = 0.005
+    shoot_towards_enemy: float = 0.1
 
 
 @dataclass
