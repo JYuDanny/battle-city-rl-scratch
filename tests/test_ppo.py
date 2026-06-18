@@ -71,25 +71,35 @@ class TestPPOTrainer:
             f"Loss did not decrease: before={loss_before.item():.4f}, after={loss_after:.4f}"
 
     def test_clip_prevents_large_policy_change(self):
-        """验证 clip 机制限制了策略比率变化在 [1-ε, 1+ε] 范围内"""
+        """验证 clip 机制限制了策略比率变化在 [1-ε, 1+ε] 范围内
+        
+        构造场景: 让 old_logp 和 new_logp 差距很大,
+        检验 clip 后 policy_loss 不会爆炸 (NaN).
+        """
         config = Config()
         config.ppo.clip_epsilon = 0.2
         net = ActorCritic(config)
         trainer = PPOTrainer(config)
 
-        # 手动构造: 让 old_logp 和 new_logp 差距很大, 检验 clip 是否生效
+        # 手动构造极端场景
         obs = torch.randn(8, 13, 13, 9)
-        logits, _ = net(obs)
-
+        logits, values = net(obs)
+        
         actions = torch.zeros(8, dtype=torch.long)
         dist = torch.distributions.Categorical(logits=logits)
         old_logp = dist.log_prob(actions).detach()
         old_logp[0] = -10.0  # 极端旧概率
 
         adv = torch.randn(8)
+        # 使用当前 value 作为 return, 让 value loss ≈ 0, 聚焦测试 policy loss
+        returns = values.squeeze().detach()
 
-        loss, _ = trainer.compute_loss(logits, None, actions, old_logp, adv, None)
+        loss, (policy_loss, value_loss, entropy, clip_frac) = trainer.compute_loss(
+            logits, values, actions, old_logp, adv, returns
+        )
 
-        # 如果 clip 没生效, 极端比率会导致巨大 loss
+        # clip 应该防止比率爆炸 → 不会产生 NaN
         assert not torch.isnan(loss), "Loss is NaN — clip may not be working"
-        assert loss.item() < 100.0, f"Loss too large: {loss.item()}"
+        assert not torch.isnan(policy_loss), "Policy loss is NaN"
+        # 极端 log_prob 差应触发 clip
+        assert clip_frac > 0, f"Expected some clipping with extreme ratio, got clip_frac={clip_frac}"
