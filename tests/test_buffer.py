@@ -86,7 +86,7 @@ class TestRolloutBuffer:
             f"Returns differ: got {buffer.returns.numpy()}, expected {expected_returns}"
 
         mean = buffer.advantages.mean().item()
-        std = buffer.advantages.std().item()
+        std = buffer.advantages.std(unbiased=False).item()
         assert abs(mean) < 1e-5, f"Normalized advantage mean not near 0: {mean}"
         assert abs(std - 1.0) < 1e-5, f"Normalized advantage std not near 1: {std}"
 
@@ -110,7 +110,7 @@ class TestRolloutBuffer:
         buffer.compute_gae(last_value)
 
         mean = buffer.advantages.mean().item()
-        std = buffer.advantages.std().item()
+        std = buffer.advantages.std(unbiased=False).item()
 
         assert abs(mean) < 0.1, f"Normalized advantage mean not near 0: {mean}"
         assert abs(std - 1.0) < 0.2, f"Normalized advantage std not near 1: {std}"
