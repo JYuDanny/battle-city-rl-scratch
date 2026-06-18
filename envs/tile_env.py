@@ -205,12 +205,13 @@ class TileEnv(gymnasium.Env):
                 self._grid_terrain[ny, nx] = 0
                 continue
 
-            if self._grid_terrain[ny, nx] == 5:
+            if (nx, ny) == self._base_pos and self._base_alive:
+                if owner == 'enemy':
+                    self._base_alive = False
+                    reward_override += self._get_reward_event('base_destroyed')
                 continue
 
-            if (nx, ny) == self._base_pos and self._base_alive:
-                self._base_alive = False
-                reward_override += self._get_reward_event('base_destroyed')
+            if self._grid_terrain[ny, nx] == 5:
                 continue
 
             hit = False
@@ -250,7 +251,7 @@ class TileEnv(gymnasium.Env):
         if len(alive_enemies) == 0:
             terminated = True
 
-        truncated = self._step_count >= self._max_steps
+        truncated = self._step_count >= self._max_steps and not terminated
 
         return self._get_obs(), reward, terminated, truncated, self._get_info()
 
