@@ -36,6 +36,7 @@ class ActorCritic(nn.Module):
         net_cfg = config.network
 
         # 计算展平后的输入维度: tile_H × tile_W × channels
+        # NOTE: obs_channels 硬编码为 9, 未来重构将迁移至 EnvConfig 中统一管理
         obs_channels = 9  # 地形(5) + 实体(3) + 方向(1)
         input_dim = env_cfg.tile_size[0] * env_cfg.tile_size[1] * obs_channels
 

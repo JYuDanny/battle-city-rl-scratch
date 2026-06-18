@@ -34,7 +34,7 @@ class TestActorCritic:
 
         _, value = net(obs)
 
-        assert value.abs().max() < 100, f"Value output too large: {value.abs().max()}"
+        assert value.abs().max() < 10, f"Value output too large: {value.abs().max()}"
 
     def test_logits_produce_valid_probs(self):
         """验证 logits 经过 softmax 后得到有效的概率分布"""
@@ -66,3 +66,41 @@ class TestActorCritic:
 
         assert torch.allclose(logits1, logits2), "Logits not deterministic"
         assert torch.allclose(value1, value2), "Value not deterministic"
+
+    def test_get_action_deterministic_returns_argmax(self):
+        """验证 deterministic=True 时返回最大概率对应的动作"""
+        config = Config()
+        net = ActorCritic(config)
+        obs = torch.randn(1, 13, 13, 9)
+
+        action, log_prob, value = net.get_action(obs, deterministic=True)
+        logits, _ = net.forward(obs)
+        expected_action = torch.argmax(logits, dim=-1)
+
+        assert action.item() == expected_action.item(), \
+            f"Deterministic action {action} != argmax {expected_action}"
+
+    def test_get_action_stochastic_shape(self):
+        """验证随机采样返回的动作形状正确, log_prob 为负值"""
+        config = Config()
+        net = ActorCritic(config)
+        obs = torch.randn(4, 13, 13, 9)
+
+        action, log_prob, value = net.get_action(obs, deterministic=False)
+
+        assert action.shape == (4,), f"Action shape mismatch: {action.shape}"
+        assert log_prob.shape == (4,), f"Log prob shape mismatch: {log_prob.shape}"
+        assert value.shape == (4, 1), f"Value shape mismatch: {value.shape}"
+        assert (log_prob <= 0).all(), f"Log prob should be <= 0, got {log_prob}"
+
+    def test_get_action_single_obs(self):
+        """验证单样本输入 [1,13,13,9] 正常工作"""
+        config = Config()
+        net = ActorCritic(config)
+        obs = torch.randn(1, 13, 13, 9)
+
+        action, log_prob, value = net.get_action(obs)
+
+        assert action.shape == (1,)
+        assert log_prob.shape == (1,)
+        assert value.shape == (1, 1)
