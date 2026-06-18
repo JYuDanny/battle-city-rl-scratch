@@ -43,12 +43,12 @@ def main():
     if args.device is not None:
         config.training.device = args.device
 
-    # 按日期+运行名组织 checkpoint 和 TensorBoard 目录
+    # 按日期+运行名组织 checkpoint 和 TensorBoard 目录 (绝对路径, 防止 cwd 变更导致失效)
     if args.run_name:
         date_str = datetime.now().strftime("%Y-%m-%d")
         run_dir = f"{date_str}_{args.run_name}"
-        config.training.save_dir = os.path.join("checkpoints", run_dir)
-        config.training.log_dir = os.path.join("runs", run_dir)
+        config.training.save_dir = os.path.abspath(os.path.join("checkpoints", run_dir))
+        config.training.log_dir = os.path.abspath(os.path.join("runs", run_dir))
 
     print("=" * 50)
     print("Battle City RL 训练框架 — tirinox 真实环境")
