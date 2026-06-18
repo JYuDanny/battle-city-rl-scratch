@@ -175,23 +175,68 @@ class TileEnv(gymnasium.Env):
         for enemy in self._enemies:
             if not enemy[2]:
                 continue
-            act = self.np_random.integers(0, 6)
-            if act < 4:
-                dir_vec = DIRECTIONS[ACTIONS[act]]
-                new_pos = enemy[0] + dir_vec
-                if self._is_walkable(new_pos):
-                    blocked = False
-                    if self._player_alive and np.array_equal(new_pos, self._player_pos):
-                        blocked = True
-                    if not blocked:
-                        enemy[0] = new_pos
-                        enemy[1] = dir_vec
-            elif act == 4:
-                bx = int(enemy[0][0]) + int(enemy[1][0])
-                by = int(enemy[0][1]) + int(enemy[1][1])
-                if 0 <= bx < 13 and 0 <= by < 13:
-                    self._bullets.append([bx, by, int(enemy[1][0]),
-                                          int(enemy[1][1]), 'enemy'])
+
+            if self.np_random.random() < 0.5:
+                ex, ey = enemy[0]
+                px, py = self._player_pos
+
+                if ex == px or ey == py:
+                    shoot_dx = 1 if px > ex else (-1 if px < ex else 0)
+                    shoot_dy = 1 if py > ey else (-1 if py < ey else 0)
+                    if shoot_dx == 0:
+                        shoot_dy = 1 if py > ey else -1
+                    bx = int(ex) + shoot_dx
+                    by = int(ey) + shoot_dy
+                    if 0 <= bx < 13 and 0 <= by < 13:
+                        self._bullets.append([bx, by, shoot_dx, shoot_dy, 'enemy'])
+                    enemy[1] = np.array([shoot_dx, shoot_dy], dtype=np.int32)
+                else:
+                    move_x = 1 if px > ex else (-1 if px < ex else 0)
+                    move_y = 1 if py > ey else (-1 if py < ey else 0)
+                    if self.np_random.random() < 0.5:
+                        move_y = 0
+                    else:
+                        move_x = 0
+                    dir_vec = np.array([move_x, move_y], dtype=np.int32)
+                    new_pos = enemy[0] + dir_vec
+                    if self._is_walkable(new_pos):
+                        blocked = False
+                        if self._player_alive and np.array_equal(new_pos, self._player_pos):
+                            blocked = True
+                        for other in self._enemies:
+                            if other is not enemy and other[2] and np.array_equal(new_pos, other[0]):
+                                blocked = True
+                                break
+                        if not blocked:
+                            enemy[0] = new_pos
+                            enemy[1] = dir_vec
+            else:
+                act = self.np_random.integers(0, 6)
+                if act < 4:
+                    dir_vec = DIRECTIONS[ACTIONS[act]]
+                    new_pos = enemy[0] + dir_vec
+                    if self._is_walkable(new_pos):
+                        blocked = False
+                        if self._player_alive and np.array_equal(new_pos, self._player_pos):
+                            blocked = True
+                        if not blocked:
+                            enemy[0] = new_pos
+                            enemy[1] = dir_vec
+                elif act == 4:
+                    bx = int(enemy[0][0]) + int(enemy[1][0])
+                    by = int(enemy[0][1]) + int(enemy[1][1])
+                    if 0 <= bx < 13 and 0 <= by < 13:
+                        self._bullets.append([bx, by, int(enemy[1][0]),
+                                              int(enemy[1][1]), 'enemy'])
+
+        if self._base_alive:
+            bx, by = self._base_pos
+            for enemy in self._enemies:
+                if enemy[2]:
+                    dist = abs(enemy[0][0] - bx) + abs(enemy[0][1] - by)
+                    if dist <= 2:
+                        reward_override += self._get_reward_event('base_danger')
+                        break
 
         new_bullets = []
         for b in self._bullets:
@@ -270,6 +315,7 @@ class TileEnv(gymnasium.Env):
             'wave_clear': 5.0,
             'death': -10.0,
             'base_destroyed': -50.0,
+            'base_danger': -0.5,
         }
         return rewards.get(event, 0.0)
 
