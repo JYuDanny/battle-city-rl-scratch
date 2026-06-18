@@ -89,8 +89,8 @@ battle-city-rl-scratch/
 │   └── ppo.py                  # PPO-Clip Trainer
 ├── training/                   # 训练编排层
 │   ├── trainer.py              # 主训练循环 + 日志 + Checkpoint
-│   ├── curriculum.py           # 课程学习管理器
-│   └── reward_shaper.py        # 分层奖励 + 势能奖励
+│   ├── curriculum.py           # 动态难度课程学习
+│   └── reward_shaper.py        # 分层奖励 + 行为塑形 (面朝/射击引导)
 ├── scripts/                    # 启动脚本
 │   ├── train_tile.py           # Tile 环境训练入口
 │   └── eval.py                 # 评估 & 录制视频
@@ -150,9 +150,18 @@ python scripts/train_tile.py --force-stage 2
 | `gamma` | 0.99 | 折扣因子 |
 | `gae_lambda` | 0.95 | GAE λ 参数 |
 | `clip_epsilon` | 0.2 | PPO clip 范围 |
-| `k_epochs` | 10 | 重用数据的更新轮数 |
-| `mini_batch_size` | 64 | 小批次样本数 |
-| `entropy_coef` | 0.01 | 熵正则化系数 |
+| `k_epochs` | 5 | 重用数据的更新轮数 |
+| `mini_batch_size` | 256 | 小批次样本数 |
+| `entropy_coef` | 0.03 | 熵正则化系数 |
+
+### 网络架构
+
+| 组件 | 配置 | 说明 |
+|------|------|------|
+| Conv2D backbone | 32→64 channels, 3×3 kernel | 保留空间关系的卷积特征提取 |
+| Shared FC | 512 | 共享全连接层 |
+| Actor Head | 512→6 | 动作 logits 输出 |
+| Critic Head | 512→1 | 状态价值输出 |
 
 ---
 
@@ -188,7 +197,7 @@ tensorboard --logdir runs
 - `Episode/Length` — 每局存活步数
 - `Train/Loss` — PPO 训练 loss
 - `Curriculum/WinRate` — 滑动窗口通关率
-- `Curriculum/Stage` — 当前课程阶段
+- `Curriculum/Difficulty` — 当前动态难度
 
 ### 训练中阶段性评估
 
@@ -199,19 +208,24 @@ tensorboard --logdir runs
 python scripts/eval.py --ckpt checkpoints/checkpoint_1000000.pt --episodes 3 --render
 ```
 
+> 提示: `--render` 模式下终端会自动清屏实现动画效果，不会逐行堆叠输出。
+
 ---
 
 ## 课程学习
 
-Curriculum Learning 按关卡固有特征（敌人数量）自动分组为 3 个 Stage：
+动态难度调节 — 不再使用固定 3-stage 分桶，根据 agent 近期通关率连续调节难度：
 
-| Stage | 关卡难度 | 晋升条件 |
-|-------|----------|----------|
-| 1 | 低 | 100 局通关率 ≥ 80% + 平均击杀率 ≥ 80% |
-| 2 | 中 | 100 局通关率 ≥ 50% |
-| 3 | 高 | —（最高阶段） |
+| 通关率区间 | 动作 | 效果 |
+|-----------|------|------|
+| > 70% | 升难度 (+0.1) | 增加敌人数量、围墙密度 |
+| 30% ~ 70% | 维持 | 保持当前配置 |
+| < 30% | 降难度 (-0.1) | 减少敌人数量、降低围墙密度 |
 
-Agent 表现崩盘（通关率 < 20%）时自动回退到上一阶段巩固。
+难度参数 (0.0~1.0) 直接影响环境生成：
+- `num_enemies`: 2~6 人
+- `wall_density`: 5%~35%
+- 从最简单开始 (difficulty=0.0)，逐步引导 agent 适应困难局面
 
 ---
 
@@ -227,13 +241,14 @@ Agent 表现崩盘（通关率 < 20%）时自动回退到上一阶段巩固。
 ## 路线图
 
 - [x] 13×13 Tile 环境 + PPO 训练流程
-- [x] 分层奖励 + 势能奖励 Reward Shaper
-- [x] Curriculum Learning 关卡自动分组
+- [x] 分层奖励 + 行为塑形 Reward Shaper (面朝/射击引导)
+- [x] Conv2D backbone 保留空间信息
+- [x] 动态难度 Curriculum Learning
+- [x] 智能敌人 AI (玩家追踪+射击)
 - [x] TensorBoard 训练监控
 - [x] Checkpoint 保存/恢复
-- [x] 评估脚本 + ASCII 渲染
+- [x] 评估脚本 + 终端清屏动画
 - [ ] tirinox 真实游戏环境对接
-- [ ] 像素输入 + CNN backbone
 - [ ] 并行采样多环境训练
 - [ ] 正式训练 + 模型发布
 
