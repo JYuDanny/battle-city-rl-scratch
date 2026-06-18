@@ -9,8 +9,7 @@ import time
 import torch
 from rl.config import Config
 from rl.network import ActorCritic
-from envs.tile_env import TileEnv
-from envs.wrappers import make_video_env
+from envs.tir_env import TirEnv
 
 
 def main():
@@ -19,12 +18,10 @@ def main():
                         help="模型 checkpoint 路径")
     parser.add_argument("--episodes", type=int, default=10,
                         help="评估 episode 数")
-    parser.add_argument("--record", action="store_true",
-                        help="是否录制视频")
     parser.add_argument("--deterministic", action="store_true",
                         help="是否使用确定性策略 (取最高概率动作)")
-    parser.add_argument("--render", action="store_true",
-                        help="是否打印 ASCII 渲染")
+    parser.add_argument("--fps", type=int, default=60,
+                        help="游戏模拟帧率")
     args = parser.parse_args()
 
     config = Config()
@@ -35,10 +32,7 @@ def main():
     net.load_state_dict(ckpt['network_state_dict'])
     net.eval()
 
-    env = TileEnv()
-    if args.record:
-        env = make_video_env(env)
-
+    env = TirEnv(fps=args.fps)
     rewards = []
     wins = 0
 
@@ -48,7 +42,7 @@ def main():
         ep_reward = 0.0
 
         while not done:
-            obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(device)
+            obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(device) / 255.0
             with torch.no_grad():
                 action, _, _ = net.get_action(obs_tensor, deterministic=args.deterministic)
 
@@ -56,16 +50,12 @@ def main():
             ep_reward += reward
             done = terminated or truncated
 
-            if args.render:
-                os.system('cls' if os.name == 'nt' else 'clear')
-                print(env.render())
-                time.sleep(0.1)
-
         rewards.append(ep_reward)
-        won = info.get('enemies_alive', 1) == 0
+        won = info.get('base_alive', False) and info.get('enemies_alive', 99) == 0
         if won:
             wins += 1
-        print(f"[Ep {ep+1}/{args.episodes}] Reward: {ep_reward:.1f}  Win: {won}")
+        print(f"[Ep {ep+1}/{args.episodes}] Reward: {ep_reward:.1f}  "
+              f"Score: {info.get('score', 0)}  Win: {won}")
 
     env.close()
     print(f"\n平均 Reward: {sum(rewards)/len(rewards):.1f}")
