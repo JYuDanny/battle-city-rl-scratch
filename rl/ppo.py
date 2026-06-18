@@ -136,6 +136,9 @@ class PPOTrainer:
         total_loss = 0.0
         num_batches = 0
 
+        # 获取网络所在设备, 确保 batch 数据在同一设备上
+        device = next(net.parameters()).device
+
         all_indices = list(range(self.rollout_steps))
         num_mini_batches = max(1, self.rollout_steps // self.mini_batch_size)
 
@@ -145,6 +148,13 @@ class PPOTrainer:
             for batch_start in range(0, self.rollout_steps, self.mini_batch_size):
                 batch_indices = all_indices[batch_start:batch_start + self.mini_batch_size]
                 obs, actions, old_logp, adv, ret = buffer.get_batch(batch_indices)
+
+                # 将 batch 数据迁移到网络所在设备
+                obs = obs.to(device)
+                actions = actions.to(device)
+                old_logp = old_logp.to(device)
+                adv = adv.to(device)
+                ret = ret.to(device)
 
                 logits, values = net(obs)
                 loss, _ = self.compute_loss(logits, values, actions, old_logp, adv, ret)
