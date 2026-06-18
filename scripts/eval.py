@@ -1,11 +1,13 @@
 """评估脚本
 
-加载训练好的模型, 运行指定 episode 并可选录制视频。
+加载训练好的模型, 运行指定 episode。
+支持三种模式:
+  --render: 弹出 pygame 窗口实时观看 agent 操作
+  --record: 录制视频保存到 videos/ 目录
+  不加参数: 仅输出统计信息 (最快)
 """
 
 import argparse
-import os
-import time
 import torch
 from rl.config import Config
 from rl.network import ActorCritic
@@ -20,8 +22,12 @@ def main():
                         help="评估 episode 数")
     parser.add_argument("--deterministic", action="store_true",
                         help="是否使用确定性策略 (取最高概率动作)")
+    parser.add_argument("--render", action="store_true",
+                        help="弹出 pygame 窗口实时显示游戏画面")
+    parser.add_argument("--record", action="store_true",
+                        help="录制视频保存到 videos/ 目录")
     parser.add_argument("--fps", type=int, default=60,
-                        help="游戏模拟帧率")
+                        help="游戏模拟帧率 (默认 60, 值越大模拟越快)")
     args = parser.parse_args()
 
     config = Config()
@@ -32,7 +38,21 @@ def main():
     net.load_state_dict(ckpt['network_state_dict'])
     net.eval()
 
-    env = TirEnv(fps=args.fps)
+    # 根据参数选择渲染模式
+    if args.render:
+        render_mode = 'human'
+    elif args.record:
+        render_mode = 'rgb_array'
+    else:
+        render_mode = None
+
+    env = TirEnv(render_mode=render_mode, fps=args.fps)
+
+    # 视频录制包装器
+    if args.record:
+        from envs.wrappers import make_video_env
+        env = make_video_env(env)
+
     rewards = []
     wins = 0
 
