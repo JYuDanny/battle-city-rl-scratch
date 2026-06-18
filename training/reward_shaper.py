@@ -1,13 +1,8 @@
 """Reward Shaper (奖励塑形器)
 
-实现分层奖励 + 势能奖励:
+实现分层奖励 + 行为塑形奖励:
   分层奖励: 根据游戏事件给予固定值奖励
-  势能奖励: 基于向最近敌人靠近/远离的距离变化
-
-潜在奖励的核心原理:
-  - 奖励 = scale × (distance_old - distance_new)
-  - 靠近敌人 → distance 减小 → reward > 0 (鼓励接近)
-  - 远离敌人 → distance 增大 → reward < 0 (惩罚退缩)
+  行为塑形: 引导 agent 面朝敌人 + 向敌人方向射击 (而非盲目接近)
 """
 
 import numpy as np
@@ -17,8 +12,8 @@ from rl.config import Config, RewardConfig
 class RewardShaper:
     """奖励塑形器
 
-    组合事件奖励和势能奖励, 生成每个 timestep 的总奖励值。
-    设计上独立于具体环境, 只依赖于 env 提供的 events 列表。
+    组合事件奖励和行为塑形奖励, 生成每个 timestep 的总奖励值。
+    设计核心: 奖励"面朝敌人"和"向敌人射击", 而非"接近敌人"(接近会导致自杀行为)。
     """
 
     def __init__(self, config: Config):
@@ -34,18 +29,24 @@ class RewardShaper:
         self.level_clear = rc.level_clear
         self.death = rc.death
         self.base_destroyed = rc.base_destroyed
-        self.potential_scale = rc.potential_scale
+        self.base_danger = rc.base_danger
+        self.facing_enemy = rc.facing_enemy
+        self.shoot_towards_enemy = rc.shoot_towards_enemy
 
     def compute(self, events: list[str], player_pos: tuple,
                 enemy_positions: list[tuple],
-                player_pos_old: tuple | None = None) -> float:
+                player_dir: tuple | None = None,
+                shot_direction: tuple | None = None) -> float:
         """计算总奖励
 
         Args:
             events: 本步发生的事件列表
+                ('survival', 'kill', 'wave_clear', 'level_clear',
+                 'death', 'base_destroyed', 'base_danger', 'shaping')
             player_pos: 当前玩家坐标 (x, y)
             enemy_positions: 所有存活敌人坐标列表 [(x,y), ...]
-            player_pos_old: 上一步玩家坐标, 用于势能计算
+            player_dir: 玩家当前朝向 (dx, dy), 用于 facing 奖励
+            shot_direction: 子弹方向 (dx, dy), 用于 shoot_towards 奖励
 
         Returns:
             total_reward: 本步总奖励值
@@ -59,44 +60,71 @@ class RewardShaper:
             'level_clear': self.level_clear,
             'death': self.death,
             'base_destroyed': self.base_destroyed,
+            'base_danger': self.base_danger,
         }
 
         for event in events:
-            if event == 'potential':
-                reward += self._potential_reward(player_pos, enemy_positions, player_pos_old)
+            if event == 'shaping':
+                reward += self._shaping_reward(
+                    player_pos, enemy_positions, player_dir, shot_direction
+                )
             else:
                 reward += event_map.get(event, 0.0)
 
         return reward
 
-    def _potential_reward(self, player_pos: tuple, enemy_positions: list[tuple],
-                           player_pos_old: tuple | None) -> float:
-        """计算势能奖励
+    def _shaping_reward(
+        self,
+        player_pos: tuple,
+        enemy_positions: list[tuple],
+        player_dir: tuple | None = None,
+        shot_direction: tuple | None = None,
+    ) -> float:
+        """计算行为塑形奖励
 
-        势能 = -distance_to_nearest_enemy (更近 = 更高势能)
-        奖励 = scale × (势能_new - 势能_old)
-             = scale × (distance_old_to_nearest - distance_new_to_nearest)
+        两个信号:
+        1. facing_enemy: 玩家朝向是否对准最近敌人 (点积 > 0.5 即为朝向)
+        2. shoot_towards_enemy: 射击方向是否对准敌人 (点积 > 0.8)
+        
+        不使用距离变化(原 potential reward), 因为"接近敌人"会引导自杀行为。
 
         Args:
             player_pos: 当前玩家坐标
             enemy_positions: 存活敌人坐标列表
-            player_pos_old: 上一步玩家坐标
+            player_dir: 玩家朝向方向
+            shot_direction: 射击方向
 
         Returns:
-            势能奖励值, 靠近敌人为正, 远离为负
+            塑形奖励值
         """
-        if player_pos_old is None or len(enemy_positions) == 0:
+        reward = 0.0
+        if not enemy_positions:
             return 0.0
 
-        def nearest_distance(pos: tuple, enemy_positions: list[tuple]) -> float:
-            min_dist = float('inf')
-            for ex, ey in enemy_positions:
-                dist = np.sqrt((pos[0] - ex) ** 2 + (pos[1] - ey) ** 2)
-                if dist < min_dist:
-                    min_dist = dist
-            return min_dist if min_dist != float('inf') else 0.0
+        nearest = None
+        min_dist = float('inf')
+        for ex, ey in enemy_positions:
+            dist = np.sqrt((player_pos[0] - ex) ** 2 + (player_pos[1] - ey) ** 2)
+            if dist < min_dist:
+                min_dist = dist
+                nearest = (ex, ey)
 
-        dist_old = nearest_distance(player_pos_old, enemy_positions)
-        dist_new = nearest_distance(player_pos, enemy_positions)
+        if nearest is None:
+            return 0.0
 
-        return self.potential_scale * (dist_old - dist_new)
+        dx = nearest[0] - player_pos[0]
+        dy = nearest[1] - player_pos[1]
+        norm = np.sqrt(dx**2 + dy**2) + 1e-8
+        enemy_dir = (dx / norm, dy / norm)
+
+        if player_dir is not None:
+            dot = player_dir[0] * enemy_dir[0] + player_dir[1] * enemy_dir[1]
+            if dot > 0.5:
+                reward += self.facing_enemy
+
+        if shot_direction is not None:
+            dot = shot_direction[0] * enemy_dir[0] + shot_direction[1] * enemy_dir[1]
+            if dot > 0.8:
+                reward += self.shoot_towards_enemy
+
+        return reward
