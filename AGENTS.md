@@ -55,14 +55,14 @@ conda activate tank-rl-teach
 # 运行测试
 pytest tests/ -v
 
-# 训练 (Tile 环境)
-python scripts/train_tile.py --device auto
+# 训练 (Tile 环境, 带运行名留存记录)
+python scripts/train_tile.py --device auto --run-name exp1
 
 # 评估
-python scripts/eval.py --ckpt checkpoints/checkpoint_XXXX.pt --episodes 10
+python scripts/eval.py --ckpt checkpoints/2026-06-18_run1/checkpoint_501760.pt --episodes 10
 
-# 评估并渲染
-python scripts/eval.py --ckpt checkpoints/checkpoint_XXXX.pt --episodes 2 --render
+# 评估并渲染 (终端清屏动画)
+python scripts/eval.py --ckpt checkpoints/2026-06-18_run1/checkpoint_501760.pt --episodes 2 --render
 
 # TensorBoard
 tensorboard --logdir runs
@@ -71,6 +71,18 @@ tensorboard --logdir runs
 git submodule update --init --recursive
 ```
 
+## 目录规范
+
+### Checkpoint 管理
+- 禁止直接在 `checkpoints/` 根目录存放 `.pt` 文件
+- 每次正式训练使用 `--run-name` 参数, checkpoint 自动归档到 `checkpoints/<YYYY-MM-DD>_<name>/`
+- 示例: `checkpoints/2026-06-18_run1/checkpoint_501760.pt`
+- 废弃的 checkpoint 子目录直接删除即可
+
+### 清理规则
+- `runs/` 目录存放 TensorBoard 日志, 每次新实验前清空
+- `__pycache__/` 和 `.pytest_cache/` 已 gitignore, 无需手动管理
+
 ## 架构
 
 ```
@@ -78,14 +90,14 @@ envs/           # Gymnasium Env 层（不感知 RL）
   tile_env.py   # 13×13 简化环境
   tir_env.py    # tirinox 包装器（后期）
 rl/             # RL 算法层（不感知具体游戏）
-  network.py    # Actor-Critic 共享网络
+  network.py    # Actor-Critic 共享网络 (Conv2D backbone)
   ppo.py        # PPO Trainer
   buffer.py     # GAE Buffer
   config.py     # 超参数
 training/       # 编排层
   trainer.py    # 主训练循环
-  curriculum.py # 课程学习
-  reward_shaper.py # 奖励塑形
+  curriculum.py # 动态难度课程学习
+  reward_shaper.py # 奖励塑形 (面朝/射击引导)
 ```
 
 ## 依赖

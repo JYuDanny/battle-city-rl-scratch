@@ -4,6 +4,8 @@
 """
 
 import argparse
+import os
+from datetime import datetime
 from rl.config import Config
 from envs.tile_env import TileEnv
 from training.trainer import Trainer
@@ -24,6 +26,8 @@ def main():
                         help="训练设备 (默认 auto)")
     parser.add_argument("--ckpt", type=str, default=None,
                         help="恢复训练的 checkpoint 路径")
+    parser.add_argument("--run-name", type=str, default=None,
+                        help="训练运行名称, checkpoint 保存到 checkpoints/<date>_<name>/ 目录下")
     args = parser.parse_args()
 
     config = Config()
@@ -37,12 +41,18 @@ def main():
     if args.device is not None:
         config.training.device = args.device
 
+    # 按日期+运行名组织 checkpoint 目录
+    if args.run_name:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        config.training.save_dir = os.path.join("checkpoints", f"{date_str}_{args.run_name}")
+
     print("=" * 50)
     print("Battle City RL 训练框架 — Tile 环境")
     print(f"设备: {config.training.device}")
     print(f"学习率: {config.ppo.lr}")
     print(f"总步数: {config.training.total_timesteps:,}")
     print(f"Seed: {config.training.seed}")
+    print(f"保存目录: {config.training.save_dir}")
     print("=" * 50)
 
     env = TileEnv()
