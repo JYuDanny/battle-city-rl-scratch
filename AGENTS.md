@@ -64,8 +64,10 @@ python scripts/eval.py --ckpt checkpoints/2026-06-18_run1/checkpoint_501760.pt -
 # 评估并渲染 (终端清屏动画)
 python scripts/eval.py --ckpt checkpoints/2026-06-18_run1/checkpoint_501760.pt --episodes 2 --render
 
-# TensorBoard
+# TensorBoard (查看全部训练)
 tensorboard --logdir runs
+# 或指定某次运行
+tensorboard --logdir runs/2026-06-18_opt1
 
 # 子模块
 git submodule update --init --recursive

@@ -41,10 +41,12 @@ def main():
     if args.device is not None:
         config.training.device = args.device
 
-    # 按日期+运行名组织 checkpoint 目录
+    # 按日期+运行名组织 checkpoint 和 TensorBoard 目录
     if args.run_name:
         date_str = datetime.now().strftime("%Y-%m-%d")
-        config.training.save_dir = os.path.join("checkpoints", f"{date_str}_{args.run_name}")
+        run_dir = f"{date_str}_{args.run_name}"
+        config.training.save_dir = os.path.join("checkpoints", run_dir)
+        config.training.log_dir = os.path.join("runs", run_dir)
 
     print("=" * 50)
     print("Battle City RL 训练框架 — Tile 环境")
@@ -53,6 +55,7 @@ def main():
     print(f"总步数: {config.training.total_timesteps:,}")
     print(f"Seed: {config.training.seed}")
     print(f"保存目录: {config.training.save_dir}")
+    print(f"日志目录: {config.training.log_dir}")
     print("=" * 50)
 
     env = TileEnv()
