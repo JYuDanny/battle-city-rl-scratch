@@ -55,14 +55,11 @@ conda activate tank-rl-teach
 # 运行测试
 pytest tests/ -v
 
-# 训练 (Tile 环境, 带运行名留存记录)
-python scripts/train_tile.py --device auto --run-name exp1
+# 训练 (tirinox 真实环境, 带运行名留存记录)
+python scripts/train_tir.py --device auto --run-name exp1
 
 # 评估
-python scripts/eval.py --ckpt checkpoints/2026-06-18_run1/checkpoint_501760.pt --episodes 10
-
-# 评估并渲染 (终端清屏动画)
-python scripts/eval.py --ckpt checkpoints/2026-06-18_run1/checkpoint_501760.pt --episodes 2 --render
+python scripts/eval.py --ckpt checkpoints/2026-06-18_exp1/checkpoint_1000000.pt --episodes 10
 
 # TensorBoard (查看全部训练)
 tensorboard --logdir runs
@@ -89,10 +86,10 @@ git submodule update --init --recursive
 
 ```
 envs/           # Gymnasium Env 层（不感知 RL）
-  tile_env.py   # 13×13 简化环境
-  tir_env.py    # tirinox 包装器（后期）
+  tir_env.py    # tirinox 真实游戏包装器 (84×84×3 像素帧, Discrete 10)
+  wrappers.py   # RecordVideo 包装器
 rl/             # RL 算法层（不感知具体游戏）
-  network.py    # Actor-Critic 共享网络 (Conv2D backbone)
+  network.py    # Conv2D Actor-Critic 网络
   ppo.py        # PPO Trainer
   buffer.py     # GAE Buffer
   config.py     # 超参数
