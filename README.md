@@ -161,14 +161,20 @@ python scripts/train_tir.py --force-stage 2
 ## 评估
 
 ```bash
-# 基础评估
+# 仅统计 (最快, 无渲染)
 python scripts/eval.py --ckpt checkpoints/2026-06-18_exp1/checkpoint_1000000.pt --episodes 10
 
-# 确定性策略 (取最高概率动作)
-python scripts/eval.py --ckpt checkpoints/2026-06-18_exp1/checkpoint_1000000.pt --deterministic
+# 实时窗口观看 agent 操作 (弹出 pygame 游戏画面)
+python scripts/eval.py --ckpt checkpoints/2026-06-18_exp1/checkpoint_1000000.pt --render
 
-# 加速模拟 (更快看到结果)
-python scripts/eval.py --ckpt checkpoints/2026-06-18_exp1/checkpoint_1000000.pt --fps 240
+# 录制视频保存到 videos/ 目录
+python scripts/eval.py --ckpt checkpoints/2026-06-18_exp1/checkpoint_1000000.pt --record
+
+# 确定性策略 + 窗口模式
+python scripts/eval.py --ckpt checkpoints/2026-06-18_exp1/checkpoint_1000000.pt --render --deterministic
+
+# 加速模拟 (--fps 越大越快)
+python scripts/eval.py --ckpt checkpoints/2026-06-18_exp1/checkpoint_1000000.pt --render --fps 240
 ```
 
 ---
