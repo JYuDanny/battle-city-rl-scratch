@@ -1,0 +1,3 @@
+[submodule "extern/pybattlecity"]
+	path = extern/pybattlecity
+	url = https://github.com/tirinox/pybattlecity.git
