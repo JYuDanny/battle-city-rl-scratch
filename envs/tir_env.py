@@ -11,6 +11,10 @@
 
 import os
 import sys
+import warnings
+
+# pygame 内部使用已弃用的 pkg_resources, 无害警告, 静默处理
+warnings.filterwarnings("ignore", message=".*pkg_resources.*", category=UserWarning)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'extern', 'pybattlecity'))
 
@@ -67,6 +71,17 @@ def _ensure_tirinox_loaded(render_mode: str | None = None):
         from config import GAME_WIDTH as _GAME_WIDTH, GAME_HEIGHT as _GAME_HEIGHT
     finally:
         os.chdir(_saved_cwd)
+
+    # 修补: tirinox 的 BonusType.GUN 未实现, 排除它防止拾取时报错
+    import bonus as _bonus_mod
+
+    @classmethod
+    def _safe_random(cls):
+        import random as _rnd
+        safe = [bt for bt in cls if bt != cls.GUN]
+        return _rnd.choice(safe)
+
+    _bonus_mod.BonusType.random = _safe_random
 
     _TIRINOX_LOADED = True
 
