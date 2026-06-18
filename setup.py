@@ -13,5 +13,6 @@ setup(
         "matplotlib>=3.7.0",
         "pygame>=2.5.0",
         "moviepy>=1.0.3",
+        "opencv-python>=4.5.0",
     ],
 )

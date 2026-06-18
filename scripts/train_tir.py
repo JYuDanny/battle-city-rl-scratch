@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--seed", type=int, default=None,
                         help="随机种子")
     parser.add_argument("--device", type=str, default="auto",
-                        choices=["auto", "cuda", "cpu"],
+                         choices=["auto", "cuda", "mps", "cpu"],
                         help="训练设备 (默认 auto)")
     parser.add_argument("--ckpt", type=str, default=None,
                         help="恢复训练的 checkpoint 路径")

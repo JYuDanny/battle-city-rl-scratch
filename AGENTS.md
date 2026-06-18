@@ -4,9 +4,15 @@
 
 ## 环境
 
-- **Conda 环境**: `tank-rl-teach` (Python 3.11)
-- **硬件**: RTX 4060 8GB VRAM
-- **操作系统**: Windows
+| 平台 | Conda 环境 | 硬件 | 用途 |
+|------|-----------|------|------|
+| **macOS (本地)** | `tank-rl-mac` (Python 3.11) | Apple Silicon (MPS) | 开发、测试、调试代码 |
+| **RunPod (云端)** | `tank-rl-runpod` (Python 3.11) | RTX 4090 24GB | 正式训练 |
+
+- **操作系统**: macOS 15 (本地) / Linux (RunPod)
+- **设备策略**:
+  - 本地 Mac: `--device auto` → MPS (Apple Silicon GPU) → CPU (fallback)
+  - RunPod: `--device cuda` 强制使用 CUDA
 
 ## 项目约定
 
@@ -50,7 +56,7 @@ brainstorming → writing-plans → subagent-driven-development → finishing-a-
 
 ```bash
 # 激活环境
-conda activate tank-rl-teach
+conda activate tank-rl-mac
 
 # 运行测试
 pytest tests/ -v
