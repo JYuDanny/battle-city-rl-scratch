@@ -13,3 +13,6 @@ crash_log/
 .ipynb_checkpoints/
 *.pt
 *.pth
+runs/
+checkpoints/
+skills/
