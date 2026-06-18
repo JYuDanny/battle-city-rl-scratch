@@ -1,11 +1,12 @@
 """Actor-Critic 网络模型
 
-采用共享 backbone 架构:
-  Observation [B, 13, 13, C] → Flatten → Embedding → ShareMLP
+采用 Conv2D backbone 架构保留空间信息:
+  Observation [B, 13, 13, C] → Conv2D [32, 64] → Flatten → FC(512) → ReLU
                                   ├── Actor Head → action_distribution
                                   └── Critic Head → state_value
 
-后续升级到像素输入时, ShareMLP 替换为 Conv2D backbone。
+相比旧版 Flatten→MLP, Conv2D 保留了"敌人在左边"这类空间关系,
+使 agent 能学到位置感知的策略。
 """
 
 import torch
@@ -17,8 +18,7 @@ from rl.config import Config
 class ActorCritic(nn.Module):
     """Actor-Critic 共享网络
 
-    共享底层特征提取, 分叉出策略头(Actor)和价值头(Critic)。
-    这种设计减少了参数总量, 且鼓励两个任务学到互补的表征。
+    Conv2D backbone 提取空间特征, 分叉出策略头(Actor)和价值头(Critic)。
 
     输入: 环境观察 [batch_size, tile_h, tile_w, channels]
     输出: (action_logits [batch_size, action_size], state_value [batch_size, 1])
@@ -35,28 +35,37 @@ class ActorCritic(nn.Module):
         env_cfg = config.env
         net_cfg = config.network
 
-        # 计算展平后的输入维度: tile_H × tile_W × channels
         # NOTE: obs_channels 硬编码为 9, 未来重构将迁移至 EnvConfig 中统一管理
-        obs_channels = 9  # 地形(5) + 实体(3) + 方向(1)
-        input_dim = env_cfg.tile_size[0] * env_cfg.tile_size[1] * obs_channels
+        # 地形(5) + 实体(3) + 方向(1)
+        obs_channels = 9
 
-        # 将 tile grid 展平后映射到嵌入空间
-        self.embedding = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(input_dim, net_cfg.tile_embedding_dim),
-            nn.ReLU(),
-        )
+        # Conv2D backbone: 保留空间结构的卷积层
+        conv_layers = []
+        in_channels = obs_channels
+        for out_channels in net_cfg.conv_channels:
+            conv_layers.extend([
+                nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+                nn.ReLU(),
+            ])
+            in_channels = out_channels
+        self.conv = nn.Sequential(*conv_layers) if conv_layers else nn.Identity()
 
-        # 共享 MLP backbone
-        share_layers = []
-        prev_dim = net_cfg.tile_embedding_dim
+        # 计算展平后维度
+        if conv_layers:
+            flattened_dim = in_channels * env_cfg.tile_size[0] * env_cfg.tile_size[1]
+        else:
+            flattened_dim = obs_channels * env_cfg.tile_size[0] * env_cfg.tile_size[1]
+
+        # 共享 FC 层
+        fc_layers = []
+        prev_dim = flattened_dim
         for hidden_dim in net_cfg.share_mlp_sizes:
-            share_layers.extend([
+            fc_layers.extend([
                 nn.Linear(prev_dim, hidden_dim),
                 nn.ReLU(),
             ])
             prev_dim = hidden_dim
-        self.share_mlp = nn.Sequential(*share_layers)
+        self.share_fc = nn.Sequential(*fc_layers) if fc_layers else nn.Identity()
 
         # Actor Head: 输出每个动作的 logit
         self.actor_head = nn.Linear(prev_dim, env_cfg.action_size)
@@ -69,7 +78,7 @@ class ActorCritic(nn.Module):
     def _init_weights(self):
         """正交初始化权重, 偏置初始化为 0
 
-        正交初始化有助于保持梯度在前向/反向传播中的稳定性。
+        对 Linear 层使用正交初始化, Conv2d 保持默认 Kaiming 初始化。
         """
         for module in self.modules():
             if isinstance(module, nn.Linear):
@@ -86,8 +95,13 @@ class ActorCritic(nn.Module):
             action_logits: [batch_size, action_size] 各动作的未归一化 logits
             state_value: [batch_size, 1] 状态价值估计
         """
-        embedded = self.embedding(obs)
-        shared = self.share_mlp(embedded)
+        # 将 [B, H, W, C] 转换为 [B, C, H, W] 供 Conv2D 使用
+        obs = obs.permute(0, 3, 1, 2)
+
+        features = self.conv(obs)
+        features = torch.flatten(features, start_dim=1)
+        shared = self.share_fc(features)
+
         action_logits = self.actor_head(shared)
         state_value = self.critic_head(shared)
         return action_logits, state_value
