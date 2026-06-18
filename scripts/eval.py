@@ -4,6 +4,7 @@
 """
 
 import argparse
+import os
 import time
 import torch
 from rl.config import Config
@@ -56,6 +57,7 @@ def main():
             done = terminated or truncated
 
             if args.render:
+                os.system('cls' if os.name == 'nt' else 'clear')
                 print(env.render())
                 time.sleep(0.1)
 

@@ -124,10 +124,10 @@ class Trainer:
 
                     if episode_count % 10 == 0:
                         print(f"[Ep {episode_count}] "
-                              f"timestep={self._timestep:,} "
-                              f"reward={episode_reward:.1f} "
-                              f"len={episode_length} "
-                              f"stage={self.curriculum.current_stage}")
+                          f"step={self._timestep:,} "
+                          f"reward={episode_reward:.1f} "
+                          f"len={episode_length} "
+                          f"diff={self.curriculum.current_difficulty:.1f}")
 
                     self.writer.add_scalar("Episode/Reward", episode_reward, self._timestep)
                     self.writer.add_scalar("Episode/Length", episode_length, self._timestep)
@@ -168,8 +168,8 @@ class Trainer:
             if self._timestep % self.log_interval < config.ppo.rollout_steps:
                 wr = self.curriculum.win_rate()
                 self.writer.add_scalar("Curriculum/WinRate", wr, self._timestep)
-                self.writer.add_scalar("Curriculum/Stage",
-                                       self.curriculum.current_stage, self._timestep)
+                self.writer.add_scalar("Curriculum/Difficulty",
+                                       self.curriculum.current_difficulty, self._timestep)
 
             changed, new_stage = self.curriculum.check_and_update()
             if changed:
@@ -220,7 +220,7 @@ class Trainer:
         torch.save({
             'timestep': self._timestep,
             'network_state_dict': self.net.state_dict(),
-            'stage': self.curriculum.current_stage,
+            'difficulty': self.curriculum.current_difficulty,
         }, path)
         print(f"[Checkpoint] 已保存: {path}")
 
@@ -233,5 +233,5 @@ class Trainer:
         ckpt = torch.load(path, map_location=self.device)
         self.net.load_state_dict(ckpt['network_state_dict'])
         self._timestep = ckpt.get('timestep', 0)
-        self.curriculum.current_stage = ckpt.get('stage', 1)
+        self.curriculum.current_difficulty = ckpt.get('difficulty', 0.0)
         print(f"[Checkpoint] 已加载: {path} (timestep={self._timestep})")

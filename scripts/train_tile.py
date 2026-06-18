@@ -49,8 +49,11 @@ def main():
     trainer = Trainer(config, env)
 
     if args.force_stage is not None:
-        trainer.curriculum.force_stage(args.force_stage)
-        print(f"[手动] Curriculum Stage 设为 {args.force_stage}")
+        # 将旧 stage 参数转换为 difficulty: S1=0.0, S2=0.5, S3=1.0
+        diff_map = {1: 0.0, 2: 0.5, 3: 1.0}
+        diff = diff_map.get(args.force_stage, 0.0)
+        trainer.curriculum.force_difficulty(diff)
+        print(f"[手动] Curriculum Difficulty 设为 {diff:.1f} (stage {trainer.curriculum.current_stage})")
 
     if args.ckpt is not None:
         trainer.load_checkpoint(args.ckpt)
